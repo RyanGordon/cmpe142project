@@ -27,6 +27,7 @@ void run_server(char *hostname, int port, int argc, char *argv[])
 	int server_socket_fd;
 	int client_socket_fd;
 	int status;
+	int sockoptval = 1;
 	socklen_t socket_length;
 	
 	// Open server socket
@@ -34,6 +35,10 @@ void run_server(char *hostname, int port, int argc, char *argv[])
 	server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if(server_socket_fd == -1)
 		die_errno("Error: socket(): ");
+
+	if (setsockopt(server_socket_fd, SOL_SOCKET, (SO_REUSEPORT | SO_REUSEADDR), (char *) &sockoptval, sizeof(sockoptval)) < 0) {
+		die_errno("Could not set REUSEPORT | REUSEADDR");
+	}
 
 	// Bind server socket
 	printf("- Binding server socket (hostname=%s, port=%d)\n", hostname, port);
