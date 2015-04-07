@@ -94,12 +94,8 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 	server = gethostbyname(hostname);
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
-	memcpy(
-		(char *)server->h_addr,
-		(char *)&server_addr.sin_addr.s_addr,
-		server->h_length
-		);
 	server_addr.sin_port = htons(port);
+	inet_pton(AF_INET, hostname, &server_addr.sin_addr.s_addr);
 
 	printf("- Connecting to server socket (hostname=%s, port=%d)\n", hostname, port);
 
