@@ -26,11 +26,24 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 
 static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct vm_fault *vmf) {
+        char *virt_page;
+        struct page *page;
+
         printk(KERN_INFO "network_mmap_fault_module_handler: Called!\n");
         // TODO: Use netlink sockets here to communicate
 	// 	 with a user process that's acting as an
 	// 	 arbitor for over-the-network communication
-	return VM_SIGFAULT_BUS; // We're not loading a page here yet so we need to tell the kernel that otherwise it will crash
+
+        // Example code for creating a page in memory and filling it with "DEADBEEF" and returning it to the faulted page
+        virt_page = (char *)get_zeroed_page(GFP_USER);
+        memcpy(virt_page, "DEADBEEF", 8);
+
+        page = virt_to_page(virt_page);
+        get_page(page) // Increments reference count of page
+        vmf->page = page;
+        printk(KERNINFO "virt_page: %016llX, page: %016llX, vmf->page: %016llX\n", (char)virt_page, (char)page, (char)vmf->page);
+
+        return 0; // If a page isn't being loaded then you need to return VM_SIGFAULT_BUS otherwise the kernel itself will crash
 }
 
 static int __init nmmapmod_init(void) {

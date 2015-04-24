@@ -34,9 +34,14 @@
 extern uint64_t syscall(long number, ...);
 
 int main() {
- char *p = (char *)syscall(SYS_network_mmap, NULL, (size_t)0x1000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
+ char *p = (char *)syscall(SYS_network_mmap, NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
  printf("Return value p: %016llX\n", (uint64_t)p);
- printf("Read mem: %02x\n", p[0x0001]); // This will cause a page fault which should be handled in our kernel module if it is loaded.
+
+ // The first access to each page in the follow two
+ // statements will cause a page fault which should
+ // be handled in our kernel module if it is loaded.
+ printf("Read mmaped page 1: %c%c%c%c%c%c%c%c\n", p2[0x0000], p2[0x0001], p2[0x0002], p2[0x0003], p2[0x0004], p2[0x0005], p2[0x0006], p2[0x0007]);
+ printf("Read mmaped page 2: %c%c%c%c%c%c%c%c\n", p2[0x1000], p2[0x1001], p2[0x1002], p2[0x1003], p2[0x1004], p2[0x1005], p2[0x1006], p2[0x1007]);
  printf("Done.\n");
  return 0;
 }
