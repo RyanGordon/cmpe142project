@@ -7,6 +7,10 @@
  * kernel itself and have to recompile a new
  * kernel each time, which is slow and hard
  * to debug
+ * 
+ * To compile type: make
+ * To load into kernel: insmod ./nmmapmod.ko
+ * To unload from kernel: rmmod nmmapmod
  **/
 
 #include <linux/module.h>       // Needed by all modules
