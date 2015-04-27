@@ -60,16 +60,17 @@ bool g_response_recieved = false;
 char *g_response_data = NULL;
 
 static void fill_with_deadbeef(void *ptr, int length) {
-        response_data = kzalloc(length, GFP_ATOMIC);
+        int i;
+
+        ptr = kzalloc(length, GFP_ATOMIC);
         for(i = 0; i < length; i++) {
-                response_data[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
+                ptr[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
         }
 }
 
 static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *nsp) {
         uint8_t response_code;
         char *response_data;
-        int i;
 
         pr_info("%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d: %s.\n",
                 __func__, jiffies, msg->id.idx, msg->id.val,
@@ -116,7 +117,7 @@ static void page_recv_callback(char *page_recieved) {
 static void wait_for_response(int max_wait) {
         int i = 0;
         while (g_response_recieved == false && i++ < max_wait) msleep(1);
-        if (i > max_weight) {
+        if (i > max_wait) {
                 // Yes this could cause problems if we ended up receiving the response
                 // at some point down the line - Would need to figure out how to ignore
                 // subsuquent responses to this timeout if we're writing good code...
