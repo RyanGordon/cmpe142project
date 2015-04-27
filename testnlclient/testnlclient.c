@@ -43,6 +43,15 @@ static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
 
 int sock;
 
+static void fill_with_deadbeef(char *ptr, int length) {
+        int i;
+
+        ptr = kzalloc(length, GFP_ATOMIC);
+        for(i = 0; i < length; i++) {
+                ptr[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
+        }
+}
+
 static int netlink_send(struct cn_msg *msg) {
     struct nlmsghdr *nlh;
     unsigned int size;
@@ -87,6 +96,7 @@ void handle_response(struct cn_msg *msg) {
 void page_request_callback(char *recv_data) {
     struct cn_msg *msg;
     char *response_data;
+    char *page;
 
     response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
 
@@ -94,12 +104,16 @@ void page_request_callback(char *recv_data) {
     printf("Recieved request address: %016llX\n", request_address);
 
     // TODO: TCP request across network to second server with memory for us
+    fill_with_deadbeef(page, CLIENT_PAGE_SIZE);
+
+    response_data[0] = RESPONSE_PAGE_OK;
+    memcpy(&response_data[1], page, CLIENT_PAGE_SIZE);
 
     msg = calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE, sizeof(uint8_t));
     msg->id = cn_nmmap_id;
     msg->len = PAGE_RESPONSE_SIZE;
 
-    memcpy(&msg->data, recv_data, PAGE_RESPONSE_SIZE);
+    memcpy(&msg->data, response_data, PAGE_RESPONSE_SIZE);
 
     netlink_send(sock, msg);
 }

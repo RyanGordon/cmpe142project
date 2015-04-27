@@ -59,7 +59,7 @@ static char cn_nmmap_name[] = "cn_nmmap_msg";
 bool g_response_recieved = false;
 char *g_response_data = NULL;
 
-static void fill_with_deadbeef(void *ptr, int length) {
+static void fill_with_deadbeef(char *ptr, int length) {
         int i;
 
         ptr = kzalloc(length, GFP_ATOMIC);
