@@ -59,12 +59,12 @@ static char cn_nmmap_name[] = "cn_nmmap_msg";
 bool g_response_recieved = false;
 char *g_response_data = NULL;
 
-static void fill_with_deadbeef(char *ptr, int length) {
+static void fill_with_deadbeef(char **ptr, int length) {
         int i;
 
-        ptr = kzalloc(length, GFP_ATOMIC);
+        *ptr = kzalloc(length, GFP_ATOMIC);
         for(i = 0; i < length; i++) {
-                ptr[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
+                (*ptr)[i] = "\xDE\xAD\xBE\xEF"[i&3]; // (Such_skill *much_respect)->Charles
         }
 }
 
@@ -85,7 +85,7 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
                         page_recv_callback(response_data);
                         break;
                 case RESPONSE_PAGE_ERR:
-                        fill_with_deadbeef(response_data, CLIENT_PAGE_SIZE);
+                        fill_with_deadbeef(&response_data, CLIENT_PAGE_SIZE);
                         page_recv_callback(response_data);
                         break;
         }
@@ -118,10 +118,11 @@ static void wait_for_response(int max_wait) {
         int i = 0;
         while (g_response_recieved == false && i++ < max_wait) msleep(1);
         if (i > max_wait) {
+                printk(KERN_INFO "Hit timeout... filling page with DEADBEEF and returning.\n");
                 // Yes this could cause problems if we ended up receiving the response
                 // at some point down the line - Would need to figure out how to ignore
                 // subsuquent responses to this timeout if we're writing good code...
-                fill_with_deadbeef(g_response_data, CLIENT_PAGE_SIZE);
+                fill_with_deadbeef(&g_response_data, CLIENT_PAGE_SIZE);
         }
         g_response_recieved = false;
 }
@@ -144,7 +145,7 @@ static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct 
 
         // Send the request away
         cn_nmmap_send_msg(nmmap_send_msg, PAGE_REQUEST_SIZE);
-        wait_for_response(1000); // Wait for the response up to 1 second
+        wait_for_response(100); // Wait for the response for a moment
 
         // Create's a page and fills it with the data recieved from over the network
         virt_page = (char *)get_zeroed_page(GFP_USER);

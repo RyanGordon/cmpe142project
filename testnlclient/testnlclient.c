@@ -43,38 +43,43 @@ static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
 
 int sock;
 
-static void fill_with_deadbeef(char *ptr, int length) {
+static void fill_with_deadbeef(char **ptr, int length) {
         int i;
 
-        ptr = kzalloc(length, GFP_ATOMIC);
+        *ptr = (char *)calloc(length, sizeof(uint8_t));
         for(i = 0; i < length; i++) {
-                ptr[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
+                (*ptr)[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
         }
 }
 
 static int netlink_send(struct cn_msg *msg) {
     struct nlmsghdr *nlh;
-    unsigned int size;
+    unsigned int cn_msg_size;
     int err;
-    char buf[128];
+    char *buf;
     struct cn_msg *m;
 
-    size = NLMSG_SPACE(sizeof(struct cn_msg) + msg->len);
+    printf("netlink_send...");
+
+    cn_msg_size = sizeof(struct cn_msg) + msg->len;
+    buf = (char *)calloc((struct nlmsghdr) + cn_msg_size, sizeof(uint8_t));
 
     nlh = (struct nlmsghdr *)buf;
     nlh->nlmsg_seq = 0;
     nlh->nlmsg_pid = getpid();
-    nlh->nlmsg_type = NLMSG_DONE;
-    nlh->nlmsg_len = size;
+    nlh->nlmsg_type = NLMSG_SPACE(NLMSG_DONE);
+    nlh->nlmsg_len = cn_msg_size;
     nlh->nlmsg_flags = 0;
 
     m = NLMSG_DATA(nlh);
-    memcpy(m, msg, sizeof(*m) + msg->len);
+    memcpy(m, msg, cn_msg_size);
 
-    err = send(sock, nlh, size, 0);
+    err = send(sock, nlh, cn_msg_size, 0);
     if (err == -1) {
         printf("Failed to send: %s [%d].\n", strerror(errno), errno);
     }
+
+    printf(" done.\n");
 
     return err;
 }
@@ -86,8 +91,8 @@ void handle_response(struct cn_msg *msg) {
     response_code = msg->data[0];
     switch (response_code) {
         case REQUEST_PAGE:
-            recv_data = (char *)calloc(sizeof(uint64_t), sizeof(uint8_t));
-            memcpy(recv_data, &msg->data[1], sizeof(uint64_t));
+            recv_data = (char *)calloc(PAGE_OFFSET_SIZE, sizeof(uint8_t));
+            memcpy(recv_data, &msg->data[1], PAGE_OFFSET_SIZE);
             page_request_callback(recv_data);
             break;
     }
@@ -100,22 +105,22 @@ void page_request_callback(char *recv_data) {
 
     response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
 
-    uint64_t request_address = (uint64_t)recv_data;
+    uint64_t request_address = *((uint64_t *)recv_data);
     printf("Recieved request address: %016llX\n", request_address);
 
     // TODO: TCP request across network to second server with memory for us
-    fill_with_deadbeef(page, CLIENT_PAGE_SIZE);
+    fill_with_deadbeef(&page, CLIENT_PAGE_SIZE);
 
     response_data[0] = RESPONSE_PAGE_OK;
     memcpy(&response_data[1], page, CLIENT_PAGE_SIZE);
 
-    msg = calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE, sizeof(uint8_t));
+    msg = (struct cn_msg *)calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE, sizeof(uint8_t));
     msg->id = cn_nmmap_id;
     msg->len = PAGE_RESPONSE_SIZE;
 
-    memcpy(&msg->data, response_data, PAGE_RESPONSE_SIZE);
+    memcpy(msg->data, response_data, PAGE_RESPONSE_SIZE);
 
-    netlink_send(sock, msg);
+    netlink_send(msg);
 }
 
 int main() {

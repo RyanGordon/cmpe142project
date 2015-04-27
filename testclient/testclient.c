@@ -15,6 +15,8 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+#define PAGE_SIZE 4096
+
 // On our custom version of the 3.13.11 kernel,
 // We added the syscall to the end which is entry 318
 #define __NR_network_mmap 318
@@ -33,15 +35,24 @@
 // many hours of sleep over this stupid thing...
 extern uint64_t syscall(long number, ...);
 
-int main() {
- char *p = (char *)syscall(SYS_network_mmap, NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
- printf("Return value p: %016llX\n", (uint64_t)p);
+void print_page(char *ptr, int offset) {
+    int i;
+    printf("mem[%d]: ", offset);
+    for (i = offset; i < (PAGE_SIZE+offset); i++) {
+        printf("%02X", (uint8_t)ptr[i]);
+    }
+    printf("\n");
+}
 
- // The first access to each page in the follow two
- // statements will cause a page fault which should
- // be handled in our kernel module if it is loaded.
- printf("Read mmaped page 1: %s\n", &p2[0x0000]);
- printf("Read mmaped page 2: %s\n", &p2[0x1000]);
- printf("Done.\n");
- return 0;
+int main() {
+    char *p = (char *)syscall(SYS_network_mmap, NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
+    printf("Return value p: %016llX\n", (uint64_t)p);
+
+    // The first access to each page in the follow two
+    // statements will cause a page fault which should
+    // be handled in our kernel module if it is loaded.
+    print_page(ptr, 0x0000);
+    print_page(ptr, 0x1000);
+    printf("Done.\n");
+    return 0;
 }
