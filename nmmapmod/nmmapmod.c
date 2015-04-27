@@ -59,6 +59,13 @@ static char cn_nmmap_name[] = "cn_nmmap_msg";
 bool g_response_recieved = false;
 char *g_response_data = NULL;
 
+static void fill_with_deadbeef(void *ptr, int length) {
+        response_data = kzalloc(length, GFP_ATOMIC);
+        for(i = 0; i < length; i++) {
+                response_data[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
+        }
+}
+
 static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *nsp) {
         uint8_t response_code;
         char *response_data;
@@ -77,10 +84,7 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
                         page_recv_callback(response_data);
                         break;
                 case RESPONSE_PAGE_ERR:
-                        response_data = kzalloc(CLIENT_PAGE_SIZE, GFP_ATOMIC);
-                        for(i = 0; i < CLIENT_PAGE_SIZE; i++) {
-                                response_data[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
-                        }
+                        fill_with_deadbeef(response_data, CLIENT_PAGE_SIZE);
                         page_recv_callback(response_data);
                         break;
         }
@@ -109,8 +113,15 @@ static void page_recv_callback(char *page_recieved) {
         g_response_recieved = true;
 }
 
-static void wait_for_response(void) {
-        while (g_response_recieved == false) msleep(1);
+static void wait_for_response(int max_wait) {
+        int i = 0;
+        while (g_response_recieved == false && i++ < max_wait) msleep(1);
+        if (i > max_weight) {
+                // Yes this could cause problems if we ended up receiving the response
+                // at some point down the line - Would need to figure out how to ignore
+                // subsuquent responses to this timeout if we're writing good code...
+                fill_with_deadbeef(g_response_data, CLIENT_PAGE_SIZE);
+        }
         g_response_recieved = false;
 }
 
@@ -132,7 +143,7 @@ static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct 
 
         // Send the request away
         cn_nmmap_send_msg(nmmap_send_msg, PAGE_REQUEST_SIZE);
-        wait_for_response(); // Wait for the response
+        wait_for_response(1000); // Wait for the response up to 1 second
 
         // Create's a page and fills it with the data recieved from over the network
         virt_page = (char *)get_zeroed_page(GFP_USER);

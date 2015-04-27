@@ -1,4 +1,5 @@
 #include <asm/types.h>
+#include <sys/socket.h>
 #include <linux/netlink.h>
 #include <linux/connector.h>
 #include <stdint.h>
@@ -6,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 void page_request_callback(char *recv_data);
 
@@ -89,11 +91,11 @@ void page_request_callback(char *recv_data) {
     response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
 
     uint64_t request_address = (uint64_t)recv_data;
-    printf("Recieved request address: %d\n", request_address);
+    printf("Recieved request address: %016llX\n", request_address);
 
     // TODO: TCP request across network to second server with memory for us
 
-    msg = calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE);
+    msg = calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE, sizeof(uint8_t));
     msg->id = cn_nmmap_id;
     msg->len = PAGE_RESPONSE_SIZE;
 
