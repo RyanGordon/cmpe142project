@@ -2,6 +2,8 @@
 #include <linux/netlink.h>
 #include <linux/connector.h>
 
+void page_request_callback(char *recv_data);
+
 #define REQUEST_PAGE 0x80
 #define RESPONSE_PAGE_OK 0x81
 #define RESPONSE_PAGE_ERR 0x82
@@ -12,8 +14,8 @@
 
 static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
 
-static const uint32_t client_page_size = 4096;
-static const uint32_t page_offset_size = sizeof(uint64_t);
+#define CLIENT_PAGE_SIZE 4096
+#define PAGE_OFFSET_SIZE sizeof(uint64_t)
 
 /**
  *
@@ -23,11 +25,11 @@ static const uint32_t page_offset_size = sizeof(uint64_t);
  * Sync Response 1 byte (response code)
  *
  */
-static const uint32_t page_request_size = sizeof(uint8_t) + page_offset_size;
-static const uint32_t page_response_size = sizeof(uint8_t) + client_page_size;
-static const uint32_t sync_request_size = sizeof(uint8_t) + page_offset_size + client_page_size;
-static const uint32_t sync_response_size = sizeof(uint8_t);
-static const uint32_t max_recv_size = max(page_request_size, sync_request_size);
+#define PAGE_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE
+#define PAGE_RESPONSE_SIZE sizeof(uint8_t) + CLIENT_PAGE_SIZE
+#define SYNC_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE + CLIENT_PAGE_SIZE
+#define SYNC_RESPONSE_SIZE sizeof(uint8_t)
+#define MAX_RECV_SIZE max(PAGE_REQUEST_SIZE, SYNC_REQUEST_SIZE)
 
 int sock;
 
@@ -39,7 +41,7 @@ void handle_response(cn_msg *msg) {
 	switch (response_code) {
 		case REQUEST_PAGE:
 			recv_data = (char *)calloc(sizeof(uint64_t));
-			memcpy(recv_data, msg->data[1], sizeof(uint64_t));
+			memcpy(recv_data, &msg->data[1], sizeof(uint64_t));
 			page_request_callback(recv_data);
 			break;
 	}
@@ -49,18 +51,18 @@ void page_request_callback(char *recv_data) {
 	struct cn_msg *msg;
 	char *response_data;
 
-	response_data = (char *)calloc(page_response_size);
+	response_data = (char *)calloc(PAGE_RESPONSE_SIZE);
 
 	uint64_t request_address = (uint64_t)recv_data;
 	printf("Recieved request address: %d\n", request_address);
 
 	// TODO: TCP request across network to second server with memory for us
 
-	msg = calloc(sizeof(struct cn_msg) + page_response_size);
+	msg = calloc(sizeof(struct cn_msg) + PAGE_RESPONSE_SIZE);
 	msg->id = cn_nmmap_id;
-	msg->len = page_response_size;
+	msg->len = PAGE_RESPONSE_SIZE;
 
-	memcpy(msg->data, recv_data, page_response_size);
+	memcpy(msg->data, recv_data, PAGE_RESPONSE_SIZE);
 
 	netlink_send(sock, msg);
 }

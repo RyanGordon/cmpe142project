@@ -20,6 +20,8 @@
 #include <linux/skbuff.h>       // Needed for netlink
 #include <linux/connector.h>    // Needed for netlink
 
+static void page_recv_callback(char *page_recieved);
+
 #define DRIVER_AUTHOR "Ryan Gordon <rygorde4@gmail.com>, Charles MacDonald <chamacd@gmail.com>"
 #define DRIVER_DESC   "Networked mmap page fault handler"
 
@@ -35,24 +37,24 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 #define RESPONSE_PAGE_SYNC_OK 0x91
 #define RESPONSE_PAGE_SYNC_ERR 0x92
 
-static const uint32_t client_page_size = 4096;
-static const uint32_t page_offset_size = sizeof(uint64_t);
+#define CLIENT_PAGE_SIZE 4096
+#define PAGE_OFFSET_SIZE sizeof(uint64_t)
 
 /**
  *
  * Page Request: 1 byte (opcode) | 8 bytes (page offset 64bit number)
- * Page Response: 1 byte (respose code) | client_page_size bytes (page data itself)
- * Sync Request: 1 byte (opcode) | 8 bytes (page offset 64bit number) | client_page_size bytes (page data itself)
+ * Page Response: 1 byte (respose code) | CLIENT_PAGE_SIZE bytes (page data itself)
+ * Sync Request: 1 byte (opcode) | 8 bytes (page offset 64bit number) | CLIENT_PAGE_SIZE bytes (page data itself)
  * Sync Response 1 byte (response code)
  *
  */
-static const uint32_t page_request_size = sizeof(uint8_t) + page_offset_size;
-static const uint32_t page_response_size = sizeof(uint8_t) + client_page_size;
-static const uint32_t sync_request_size = sizeof(uint8_t) + page_offset_size + client_page_size;
-static const uint32_t sync_response_size = sizeof(uint8_t);
+#define PAGE_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE
+#define PAGE_RESPONSE_SIZE sizeof(uint8_t) + CLIENT_PAGE_SIZE
+#define SYNC_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE + CLIENT_PAGE_SIZE
+#define SYNC_RESPONSE_SIZE sizeof(uint8_t)
 
 static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
-static char cn_name[] = "cn_nmmap_msg";
+static char cn_nmmap_name[] = "cn_nmmap_msg";
 
 bool g_response_recieved = false;
 char *g_response_data = NULL;
@@ -60,6 +62,7 @@ char *g_response_data = NULL;
 static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *nsp) {
         uint8_t response_code;
         char *response_data;
+        int i;
 
         pr_info("%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d: %s.\n",
                 __func__, jiffies, msg->id.idx, msg->id.val,
@@ -69,13 +72,13 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
         response_code = msg->data[0];
         switch (response_code) {
                 case RESPONSE_PAGE_OK:
-                        response_data = kzalloc(client_page_size, GFP_ATOMIC);
-                        memcpy(response_data, msg->data[1], client_page_size);
+                        response_data = kzalloc(CLIENT_PAGE_SIZE, GFP_ATOMIC);
+                        memcpy(response_data, &msg->data[1], CLIENT_PAGE_SIZE);
                         page_recv_callback(response_data);
                         break;
                 case RESPONSE_PAGE_ERR:
-                        response_data = kzalloc(client_page_size, GFP_ATOMIC);
-                        for(int i = 0; i < client_page_size; i++) {
+                        response_data = kzalloc(CLIENT_PAGE_SIZE, GFP_ATOMIC);
+                        for(i = 0; i < CLIENT_PAGE_SIZE; i++) {
                                 response_data[i] = "\xDE\xAD\xBE\xEF"[i&3]; // Charles is da man...
                         }
                         page_recv_callback(response_data);
@@ -84,9 +87,9 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
 }
 
 static int cn_nmmap_send_msg(char *data, uint32_t length) {
-        cn_msg *send_msg;
+        struct cn_msg *send_msg;
 
-        send_msg = kzalloc(sizeof(cn_msg) + length, GFP_ATOMIC);
+        send_msg = kzalloc(sizeof(struct cn_msg) + length, GFP_ATOMIC);
         if (!send_msg) {
                 return 1;
         }
@@ -123,22 +126,22 @@ static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct 
         printk(KERN_INFO "network_mmap_fault_module_handler: Called pgoff: %d\n", faulted_page);
 
         // Prepare the network request
-        nmmap_send_msg = kzalloc(page_request_size, GFP_ATOMIC);
+        nmmap_send_msg = kzalloc(PAGE_REQUEST_SIZE, GFP_ATOMIC);
         nmmap_send_msg[0] = REQUEST_PAGE;
         *((uint64_t *)&nmmap_send_msg[1]) = faulted_page;
 
         // Send the request away
-        cn_nmmap_send_msg(nmmap_send_data, page_request_size);
+        cn_nmmap_send_msg(nmmap_send_msg, PAGE_REQUEST_SIZE);
         wait_for_response(); // Wait for the response
 
         // Create's a page and fills it with the data recieved from over the network
         virt_page = (char *)get_zeroed_page(GFP_USER);
-        memcpy(virt_page, g_response_data, client_page_size);
+        memcpy(virt_page, g_response_data, CLIENT_PAGE_SIZE);
 
         page = virt_to_page(virt_page);
-        get_page(page) // Increments reference count of page
+        get_page(page); // Increments reference count of page
         vmf->page = page;
-        printk(KERNINFO "virt_page: %016llX, page: %016llX, vmf->page: %016llX\n", (char)virt_page, (char)page, (char)vmf->page);
+        printk(KERN_INFO "virt_page: %016llX, page: %016llX, vmf->page: %016llX\n", (char)virt_page, (char)page, (char)vmf->page);
 
         return 0; // If a page isn't being loaded then you need to return VM_SIGFAULT_BUS otherwise the kernel itself will crash
 }
