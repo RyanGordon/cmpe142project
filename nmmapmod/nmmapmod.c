@@ -109,7 +109,7 @@ static void page_recv_callback(char *page_recieved) {
         g_response_recieved = true;
 }
 
-static void wait_for_response() {
+static void wait_for_response(void) {
         while (g_response_recieved == false) msleep(1);
         g_response_recieved = false;
 }
