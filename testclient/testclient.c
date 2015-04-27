@@ -40,8 +40,8 @@ int main() {
  // The first access to each page in the follow two
  // statements will cause a page fault which should
  // be handled in our kernel module if it is loaded.
- printf("Read mmaped page 1: %c%c%c%c%c%c%c%c\n", p2[0x0000], p2[0x0001], p2[0x0002], p2[0x0003], p2[0x0004], p2[0x0005], p2[0x0006], p2[0x0007]);
- printf("Read mmaped page 2: %c%c%c%c%c%c%c%c\n", p2[0x1000], p2[0x1001], p2[0x1002], p2[0x1003], p2[0x1004], p2[0x1005], p2[0x1006], p2[0x1007]);
+ printf("Read mmaped page 1: %s\n", &p2[0x0000]);
+ printf("Read mmaped page 2: %s\n", &p2[0x1000]);
  printf("Done.\n");
  return 0;
 }
