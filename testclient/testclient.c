@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <sys/mman.h>   
 
 #define PAGE_SIZE 4096
 
@@ -51,8 +52,8 @@ int main() {
     // The first access to each page in the follow two
     // statements will cause a page fault which should
     // be handled in our kernel module if it is loaded.
-    print_page(ptr, 0x0000);
-    print_page(ptr, 0x1000);
+    print_page(p, 0x0000);
+    print_page(p, 0x1000);
     printf("Done.\n");
     return 0;
 }
