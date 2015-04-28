@@ -18,12 +18,70 @@ size_t client_region_size;
 struct sigaction action;
 int client_socket_fd;
 
-#define CMD_GET_PAGE	0xA8
-#define CMD_DISCONNECT	0xA9
+#define DEFAULT_CLIENT_PAGE_SIZE	0x1000
+#define DEFAULT_CLIENT_MEMORY_SIZE	0x10000
+
+
+/* Client-side functions */
+
+bool nm_client_connect(uint64 page_size, uint64 memory_size)
+{
+	/* Send command and parameters */
+	comms_sendb(client_socket_fd, CLIENT_CONNECT);
+	comms_sendq(client_socket_fd, page_size);
+	comms_sendq(client_socket_fd, memory_size);
+	
+	/* Get status */
+	uint8 status = comms_getb(client_socket_fd);
+
+	/* Return status */	
+	return (status == NM_RESPONSE_ACK) ? true : false;
+}
+
+void nm_client_disconnect(void)
+{
+	comms_sendb(client_socket_fd, CLIENT_DISCONNECT);
+}
+
+bool nm_client_request_sync(int client_socket_fd, uint64 value, uint8 *buffer)
+{
+	/* Send page request command to server */
+	comms_sendb(client_socket_fd, REQUEST_PAGE_SYNC);
+	
+	/* Send offset */
+	comms_sendq(client_socket_fd, value);
+	
+	/* Read page from server over network */
+	comms_send(client_socket_fd, buffer, client_page_size);
+
+	return true;
+}
+
+bool nm_client_request_page(int client_socket_fd, uint64 value, uint8 *buffer)
+{
+	uint8 status = NM_RESPONSE_ACK;
+	
+	/* Send page request command to server */
+	comms_sendb(client_socket_fd, REQUEST_PAGE);
+
+	/* Send offset */
+	comms_sendq(client_socket_fd, value);
+	
+	/* Send page if status is OK */
+	comms_get(client_socket_fd, buffer, client_page_size);
+
+	return true;
+}
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
 void my_sigsegv_handler(int sig, siginfo_t *siginfo, void *ucontext)
 {
 	uint8 buffer[256];
+	int transferred;
 
 	uint64 access_address = (uint64)siginfo->si_addr;
 	void *page_base = (void *)(access_address & (uint64)client_page_mask);
@@ -47,29 +105,12 @@ void my_sigsegv_handler(int sig, siginfo_t *siginfo, void *ucontext)
 	/* Verify access was granted */		
 	if(status == -1)
 	 	die_errno("Handler: mprotect() failed ");
-	
-	/* Send page request command to server */
-	int transferred;
-	buffer[0] = CMD_GET_PAGE;
-	write_socket_blocking(client_socket_fd, buffer, 1, transferred);
 
 	/* Calculate absolute offset in shared memory area */
 	uint64 shared_offs = (uint64)page_base - (uint64)client_region_base;
 	
-	/* Split 64-bit address into bytes */
-	for(int i = 0; i < 8; i++)
-		buffer[i] = (shared_offs >> (i << 3)) & 0xFF;
-
-	/* Send address to server */
-	write_socket_blocking(client_socket_fd, buffer, 8, transferred);
-	
-	/* Read page from server over network */
-	read_socket_blocking(
-		client_socket_fd, 
-		(uint8 *)page_base, 
-		client_page_size, 
-		transferred
-		);
+	 	
+	nm_client_request_page(client_socket_fd, shared_offs, (uint8 *)page_base);		
 }
 
 /*----------------------------------------------------------------------------*/
@@ -96,7 +137,6 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
 	inet_pton(AF_INET, hostname, &server_addr.sin_addr.s_addr);
-
 	printf("- Connecting to server socket (hostname=%s, port=%d)\n", hostname, port);
 
 	/* Establish connection */
@@ -107,6 +147,13 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 		);
 	if(status == -1)
 		die_errno("Error: connect(): ");
+
+
+	if(!nm_client_connect(DEFAULT_CLIENT_PAGE_SIZE, DEFAULT_CLIENT_MEMORY_SIZE))
+	{
+		printf("Error: nm_client_connect():\n");
+		return;
+	}
 
 	//======================================================================
 	// We are connected to the server
@@ -122,7 +169,7 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 	client_offs_mask = client_page_size - 1;
 	client_page_mask = ~client_offs_mask;
 	client_region_base = 0;
-	client_region_size = REGION_SIZE;
+	client_region_size = DEFAULT_CLIENT_MEMORY_SIZE;
 
 	client_region_base = (char *)mmap(
 		NULL, 				// Region base address
@@ -165,10 +212,26 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 	unsigned char *data = (unsigned char *)client_region_base;
 	
 	/* Touch some words in the shared memory area to trigger network page mapping */
-	for(int i = 0; i < 16; i++)
+	for(int i = 0; i < client_region_size/client_page_size; i++)
 	{
 		printf("** Accessing page %d:\n", i);
-		printf("Access data: %02X\n", data[0x000A + i * 0x1000]);
+		printf("Access data: %02X\n", data[0x000A + i * client_page_size]);
+	}
+	
+	/* Write back to modify server side */
+	
+	for(int i = 0; i < client_region_size; i++)
+		data[i] = "\xDE\xAD\xBE\xEF"[i & 3];
+	
+	/* Force synchronization */
+	for(int i = 0; i < client_region_size/client_page_size; i++)
+	{
+		printf("synchronizing page %d\n", i);
+		nm_client_request_sync(
+			client_socket_fd, 
+			i*client_page_size, 
+			&data[i*client_page_size]
+			);
 	}
 
 	//----------------------------------------------------------------------
@@ -176,8 +239,7 @@ void run_client(char *hostname, int port, int argc, char *argv[])
 	//----------------------------------------------------------------------
 
 	/* Send disconnect command */
-	buffer[0] = CMD_DISCONNECT;
-	write(client_socket_fd, buffer, 1);
+	nm_client_disconnect();
 	
 	/* Close client socket */
 	puts("- Closing client socket");
