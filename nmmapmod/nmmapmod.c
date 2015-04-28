@@ -53,7 +53,7 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 #define SYNC_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE + CLIENT_PAGE_SIZE
 #define SYNC_RESPONSE_SIZE sizeof(uint8_t)
 
-static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
+static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 3, 0x456 };
 static char cn_nmmap_name[] = "cn_nmmap_msg";
 
 bool g_response_recieved = false;
@@ -72,11 +72,8 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
         uint8_t response_code;
         char *response_data;
 
-        pr_info("%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d: %s.\n",
-                __func__, jiffies, msg->id.idx, msg->id.val,
-                msg->seq, msg->ack, msg->len,
-                msg->len ? (char *)msg->data : "");
-
+        printk(KERN_INFO "%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d.\n", __func__, jiffies, msg->id.idx, msg->id.val, msg->seq, msg->ack, msg->len, msg->len);
+        
         response_code = msg->data[0];
         switch (response_code) {
                 case RESPONSE_PAGE_OK:
@@ -133,7 +130,6 @@ static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct 
         char *nmmap_send_msg;
         uint64_t faulted_page;
 
-        // Get the faulted page number - TODO: Is this right??
         faulted_page = vmf->pgoff << PAGE_SHIFT;
 
         printk(KERN_INFO "network_mmap_fault_module_handler: Called pgoff: %d\n", faulted_page);
