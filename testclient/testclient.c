@@ -23,6 +23,9 @@
 #define __NR_network_mmap 318
 #define SYS_network_mmap __NR_network_mmap
 
+ #define __NR_network_msync 319
+ #define SYS_network_msync __NR_network_msync
+
 // Need to do this here because glibc/gcc is fucked 
 // and the default syscall header is not compatible
 // with returning 64bit values. It turns out that
@@ -45,8 +48,16 @@ void print_page(char *ptr, int offset) {
     printf("\n");
 }
 
+char *network_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
+    return (char *)syscall(SYS_network_mmap, addr, len, prot, flags, fd, pgoff);
+}
+
+int network_msync(unsigned long start, size_t len, int flags) {
+    return (int)syscall(SYS_network_msync, start, len, flags);
+}
+
 int main() {
-    char *p = (char *)syscall(SYS_network_mmap, NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
+    char *p = network_mmap(NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
     printf("Return value p: %016llX\n", (uint64_t)p);
 
     // The first access to each page in the follow two
