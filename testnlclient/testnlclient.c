@@ -21,7 +21,7 @@ void page_request_callback(char *recv_data);
 #define RESPONSE_PAGE_SYNC_OK 0x91
 #define RESPONSE_PAGE_SYNC_ERR 0x92
 
-static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
+static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 3, 0x456 };
 
 
 #define CLIENT_PAGE_SIZE 4096
@@ -42,6 +42,7 @@ static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 4, 0x1 };
 #define MAX_RECV_SIZE MAX(PAGE_REQUEST_SIZE,SYNC_REQUEST_SIZE)
 
 int sock;
+int seq;
 
 static void fill_with_deadbeef(char **ptr, int length) {
         int i;
@@ -55,31 +56,31 @@ static void fill_with_deadbeef(char **ptr, int length) {
 static int netlink_send(struct cn_msg *msg) {
     struct nlmsghdr *nlh;
     unsigned int cn_msg_size;
+    unsigned int total_size;
     int err;
     char *buf;
     struct cn_msg *m;
 
-    printf("netlink_send...");
-
     cn_msg_size = sizeof(struct cn_msg) + msg->len;
-    buf = (char *)calloc((struct nlmsghdr) + cn_msg_size, sizeof(uint8_t));
-
+    total_size = NLMSG_SPACE(cn_msg_size);
+    buf = (char *)calloc(total_size, sizeof(uint8_t));
+    
     nlh = (struct nlmsghdr *)buf;
-    nlh->nlmsg_seq = 0;
+    nlh->nlmsg_seq = seq++;
     nlh->nlmsg_pid = getpid();
-    nlh->nlmsg_type = NLMSG_SPACE(NLMSG_DONE);
-    nlh->nlmsg_len = cn_msg_size;
+    nlh->nlmsg_type = NLMSG_DONE;
+    nlh->nlmsg_len = total_size;
     nlh->nlmsg_flags = 0;
 
     m = NLMSG_DATA(nlh);
     memcpy(m, msg, cn_msg_size);
-
-    err = send(sock, nlh, cn_msg_size, 0);
+    
+    printf("Sending response with size: %d, %d\n", nlh->nlmsg_len, cn_msg_size);
+    err = send(sock, nlh, total_size, 0);
+    printf("send response code: %d\n", err);
     if (err == -1) {
         printf("Failed to send: %s [%d].\n", strerror(errno), errno);
     }
-
-    printf(" done.\n");
 
     return err;
 }
@@ -106,7 +107,7 @@ void page_request_callback(char *recv_data) {
     response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
 
     uint64_t request_address = *((uint64_t *)recv_data);
-    printf("Recieved request address: %016llX\n", request_address);
+    printf("Recieved request address: %d\n", request_address);
 
     // TODO: TCP request across network to second server with memory for us
     fill_with_deadbeef(&page, CLIENT_PAGE_SIZE);
@@ -119,7 +120,6 @@ void page_request_callback(char *recv_data) {
     msg->len = PAGE_RESPONSE_SIZE;
 
     memcpy(msg->data, response_data, PAGE_RESPONSE_SIZE);
-
     netlink_send(msg);
 }
 
@@ -130,6 +130,8 @@ int main() {
     struct cn_msg *data;
     char *buf = (char *)calloc((int)MAX_RECV_SIZE, sizeof(uint8_t));
     int len;
+    
+    seq = 0;
 
     sock = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);
     if (sock == -1) {
