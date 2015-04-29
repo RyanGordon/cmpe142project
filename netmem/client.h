@@ -2,7 +2,7 @@
 #define _CLIENT_H_
 
 /* Function prototypes */
-void run_client(char *hostname, int port, int argc, char *argv[]);
+int run_client(char *hostname, int port, int argc, char *argv[]);
 
 #endif /* _CLIENT_H_ */
 

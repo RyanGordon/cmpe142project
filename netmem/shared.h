@@ -37,7 +37,7 @@ typedef unsigned long long uint64;
 #define PAGE_RESPONSE_SIZE sizeof(uint8_t) + CLIENT_PAGE_SIZE
 #define SYNC_REQUEST_SIZE sizeof(uint8_t) + PAGE_OFFSET_SIZE + CLIENT_PAGE_SIZE
 #define SYNC_RESPONSE_SIZE sizeof(uint8_t)
-
+#define MAX_RECV_SIZE max(PAGE_REQUEST_SIZE,SYNC_REQUEST_SIZE)
 
 // NEW CODE END
 
@@ -51,20 +51,24 @@ typedef unsigned long long uint64;
 #include <unistd.h>
 #include <errno.h>
 #include <netdb.h>
-
+#include <asm/types.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/fcntl.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-
+#include <linux/netlink.h>
+#include <linux/connector.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 
 #include "util.h"
 #include "comms.h"
 #include "server.h"
 #include "client.h"
+#include <algorithm>
+
 
 #endif /* _SHARED_H_ */
