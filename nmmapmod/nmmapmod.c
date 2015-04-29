@@ -85,6 +85,12 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
                         fill_with_deadbeef(&response_data, CLIENT_PAGE_SIZE);
                         page_recv_callback(response_data);
                         break;
+                case RESPONSE_PAGE_SYNC_OK:
+                        printk(KERN_INFO "Successfully network_msynced page.\n");
+                        break;
+                case RESPONSE_PAGE_SYNC_ERR:
+                        printk(KERN_INFO "There was an error network_msyncing a page.\n");
+                        break;
         }
 }
 
