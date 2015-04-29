@@ -127,7 +127,21 @@ static void wait_for_response(int max_wait) {
 
 static int network_msync_handler(unsigned long start, size_t len, int flags)
 {
+    struct mm_struct *mm = current->mm;    
+    struct vm_area_struct *vma;
+    int error = -EINVAL;
+    int i;
+    vma = find_vma(mm, start);
     
+    while(vma)
+    {
+        
+        // ....
+        vma = vma->vm_end;
+    }
+    
+
+
 }
 
 static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct vm_fault *vmf) {
