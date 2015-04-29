@@ -124,6 +124,12 @@ static void wait_for_response(int max_wait) {
         g_response_recieved = false;
 }
 
+
+static int network_msync_handler(unsigned long start, size_t len, int flags)
+{
+    
+}
+
 static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct vm_fault *vmf) {
         char *virt_page;
         struct page *page;
@@ -165,13 +171,16 @@ static int __init nmmapmod_init(void) {
                 cn_del_callback(&cn_nmmap_id);
                 return 1;
         }
-
+        
+        set_kmod_network_msync(network_msync_handler);
         set_kmod_network_mmap_fault_handler(network_mmap_fault_module_handler);
         return 0;
 }
 
+
 static void __exit nmmapmod_exit(void) {
         set_kmod_network_mmap_fault_handler(NULL);
+        set_kmod_network_msync(NULL);
         cn_del_callback(&cn_nmmap_id);
         printk(KERN_INFO "Unloaded Network MMAP Kernel Module\n");
 }
