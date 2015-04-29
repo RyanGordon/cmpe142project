@@ -10,11 +10,140 @@
 #include "shared.h"
 using namespace std;
 
+/*------------------------------------------------*/
 
+/* This is the network memory */
 uint8 *shared_memory = NULL;
-int shared_memory_size;
+static int shared_memory_size = 0x10000; 	/* Fixed: 64K */
+static int shared_page_size = 0x1000;	/* Fixed: 4K */
 
 
+void command_request_page_sync(int client_socket_fd)
+{
+	uint64 shared_memory_offset;
+		
+	/* Get offset of page from client */
+	shared_memory_offset = comms_getq(client_socket_fd);
+
+	/* Debug */
+	printf("* Page sync request, shared memory offset: %016llX\n", 
+		shared_memory_offset);
+
+	/* Read memory */
+	comms_get(
+		client_socket_fd, 
+		&shared_memory[shared_memory_offset], 
+		shared_page_size 
+		);
+}
+
+void command_request_page(int client_socket_fd)
+{
+	uint64 shared_memory_offset;
+	int transferred;
+		
+	/* Get offset of page from client */
+	shared_memory_offset = comms_getq(client_socket_fd);
+
+	/* Debug */
+	printf("* Page data request, shared memory offset: %016llX\n", 
+		shared_memory_offset);
+
+	/* Write memory*/
+	comms_send(
+		client_socket_fd, 
+		&shared_memory[shared_memory_offset], 
+		shared_page_size
+		);
+}
+
+/*
+	Client sends
+	byte  - opcode
+	qword - local page size
+	qword - shared memory size
+	Server responds with
+	ACK - Page size and memory size accepted
+	NACK - Connection denied (invalid page size or memory size)
+*/
+bool command_connect(int client_socket_fd)
+{
+	bool error = false;
+	
+	uint64 page_size = comms_getq(client_socket_fd);
+	uint64 memory_size = comms_getq(client_socket_fd);
+	
+	printf("Client connect: page_size=%016llX, memory_size=%016llx\n",
+		page_size, memory_size);
+		
+	if(page_size != 0x1000)
+		error = true;
+	if(memory_size > 0x10000)
+		error = true;
+		
+	/* If default memory exists, deallocate */
+	if(shared_memory) delete []shared_memory;
+	
+	/* Reallocate new memory */
+	shared_memory = new uint8 [memory_size];
+	if(!shared_memory)
+		error = true;
+		
+	/* Update globals */
+	shared_page_size = page_size;
+	shared_memory_size = memory_size;
+
+	comms_sendb(client_socket_fd, error ? NM_RESPONSE_NACK : NM_RESPONSE_ACK);	
+	
+	return error;
+}
+
+void command_disconnect(int client_socket_fd)
+{
+	/* */
+}
+
+void server_dispatch_command(int client_socket_fd)
+{
+	bool running = true;
+	
+	/* Dispatch loop for client commands */
+	printf("* Waiting for client commands.\n");	
+	while(running)
+	{
+		uint8 opcode = comms_getb(client_socket_fd);
+	
+		switch(opcode)
+		{
+			case REQUEST_PAGE_SYNC: /* Request page sync */
+				command_request_page_sync(client_socket_fd);
+				break;
+				
+			case REQUEST_PAGE: /* Request page data */
+				command_request_page(client_socket_fd);
+				break;
+				
+			case CLIENT_CONNECT: /* Client protocol connect to server */
+				if(command_connect(client_socket_fd))
+					return;
+				break;
+			
+			case CLIENT_DISCONNECT: /* Client protocol disconnect from server */
+				command_disconnect(client_socket_fd);
+							
+				/* Client is disconnecting so we will disconnect too */
+				running = 0;
+				break;
+			
+			default: /* Unknown instruction */
+				die("ERROR: Server receieved unknown command %02X from client.\n", 
+					opcode);
+				break;
+		}
+	}
+}
+
+/*------------------------------------------------*/
 
 void run_server(char *hostname, int port, int argc, char *argv[])
 {
@@ -88,79 +217,26 @@ void run_server(char *hostname, int port, int argc, char *argv[])
 	//----------------------------------------------------------------------
 	// Allocate shared memory
 	
-	shared_memory_size = REGION_SIZE;
 	shared_memory = new uint8 [shared_memory_size];
 	printf("Server: Allocated %08X bytes of network-shared memory.\n", shared_memory_size);
 	
-	for(int i = 0; i < REGION_SIZE / 0x1000; i++)
+	for(int i = 0; i < shared_memory_size / shared_page_size; i++)
 	{
-		memset(shared_memory + i * 0x1000, 0xA0+i, 0x1000);
+		memset(shared_memory + i * shared_page_size, 0xA0+i, shared_page_size);
 	}
 	
 	//----------------------------------------------------------------------
 
-	uint8 buffer[256];
-	uint64 shared_memory_offset;
-	int transferred;
+	/* Run dispatch until quit requested by client */
+	server_dispatch_command(client_socket_fd);
 	
-	bool running = true;
+	printf("\n***Server dispatch loop exit.\n");
 	
-	/* Dispatch loop for client commands */
-	printf("* Waiting for client commands.\n");	
-	while(running)
-	{
-		/* Read command from client */
-		read_socket_blocking(client_socket_fd, buffer, 1, transferred);
-	
-		switch(buffer[0])
-		{
-			case 0xA8: /* Request page */
-
-				read_socket_blocking(client_socket_fd, buffer, 8, transferred);
-
-				shared_memory_offset = 0;
-				for(int i = 0; i < 8; i++)
-					shared_memory_offset |= (uint64)buffer[i] << (i << 3);
-			
-				printf("* Page request, shared memory offset: %016llX\n", 
-					shared_memory_offset);
-
-				write_socket_blocking(
-					client_socket_fd, 
-					&shared_memory[shared_memory_offset], 
-					0x1000, 
-					transferred
-					);
-			
-				printf("* Sent %08X of page data to client.\n", transferred);
-				break;
-			
-			case 0xA9: /* Disconnect */
-				running = 0;
-				break;
-			
-			default:
-				die("ERROR: Server receieved unknown command %02X from client.\n", buffer[0]);
-				break;
-		}
-	}	
-	
-	
-#if 0		
-	// Print buffer content
-	printf("- Received %d bytes:\n", bytes_read);
-	for(int i = 0; i < bytes_read; i++)
-	{
-		if((i & 0x0F) == 0x00)
-			printf("%02X: ", i);
-		printf("%02X ", buffer[i]);
-		if((i & 0x0F) == 0x0F)
-			printf("\n");
-	}	
-	printf("\n");
-
-	delete []buffer;
-#endif	
+	/* Save (possibly synchronized) shared memory) */
+	FILE *fd;
+	fd = fopen("shared.bin", "wb");
+	fwrite(shared_memory, shared_memory_size, 1, fd);
+	fclose(fd);
 
 	delete []shared_memory;
 

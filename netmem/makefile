@@ -22,6 +22,7 @@ EXE	=	main.exe
 OBJ	=	obj/main.o	\
 		obj/server.o	\
 		obj/client.o	\
+		obj/comms.o	\
 		obj/util.o
 
 # Dependencies
@@ -36,7 +37,7 @@ obj/%.o	:	%.cpp
 # Clean project
 .PHONY	:	clean
 clean	:
-		rm *.o
+		rm $(OBJ)
 		rm $(EXE)
 		
 # Run project
