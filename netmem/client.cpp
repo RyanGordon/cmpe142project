@@ -93,7 +93,7 @@ void page_sync_request_callback(uint64_t page_offset, char *page) {
     response_data = (char *)calloc((int)SYNC_RESPONSE_SIZE, sizeof(uint8_t));
 
     printf("Synchronizing page: %d\n", page_offset);
-    ret = nm_client_request_sync(client_socket_fd, CLIENT_PAGE_SIZE, (uint8_t *)page);
+    ret = nm_client_request_sync(client_socket_fd, page_offset, (uint8_t *)page);
 
     msg = (struct cn_msg *)calloc(sizeof(struct cn_msg) + SYNC_RESPONSE_SIZE, sizeof(uint8_t));
     msg->id = cn_nmmap_id;

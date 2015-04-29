@@ -87,9 +87,11 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
                         break;
                 case RESPONSE_PAGE_SYNC_OK:
                         printk(KERN_INFO "Successfully network_msynced page.\n");
+                        page_sync_recv_callback((char *)(&response_code));
                         break;
                 case RESPONSE_PAGE_SYNC_ERR:
                         printk(KERN_INFO "There was an error network_msyncing a page.\n");
+                        page_sync_recv_callback((char *)(&response_code));
                         break;
         }
 }
@@ -112,13 +114,33 @@ static int cn_nmmap_send_msg(char *data, uint32_t length) {
         return 0;
 }
 
+static void page_sync_recv_callback(char *page_sync_resp_code) {
+        g_response_data = page_sync_resp_code;
+        g_response_recieved = true;
+}
+
 static void page_recv_callback(char *page_recieved) {
         g_response_data = page_recieved;
         g_response_recieved = true;
 }
 
-static void wait_for_response(int max_wait) {
+static bool wait_for_page_sync_response(int max_wait) {
+        bool retval = true;
         int i = 0;
+
+        while (g_response_recieved == false && i++ < max_wait) msleep(1);
+        if (i > max_wait) {
+                printk(KERN_INFO "Hit timeout... returning false.\n");
+                retval = false;
+        }
+        g_response_recieved = false;
+
+        return retval;
+}
+
+static void wait_for_page_response(int max_wait) {
+        int i = 0;
+
         while (g_response_recieved == false && i++ < max_wait) msleep(1);
         if (i > max_wait) {
                 printk(KERN_INFO "Hit timeout... filling page with DEADBEEF and returning.\n");
@@ -135,19 +157,39 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
 {
     struct mm_struct *mm = current->mm;    
     struct vm_area_struct *vma;
+    int end;
+    int current;
+    int offset;
     int error = -EINVAL;
-    int i;
-    vma = find_vma(mm, start);
-    
-    while(vma)
-    {
-        
-        // ....
-        vma = vma->vm_end;
+    bool sync_response;
+    char *nmmap_send_msg;
+
+    // TODO: These 3 lines and the while loop may be wrong
+    // I'm assuming start is physical address of the beginning
+    // of the page in memory and that it is contiguous for
+    // length "len" and that the pages are are constant 4Ks
+    len = (len + ~PAGE_MASK) & PAGE_MASK;
+    end = start + len;
+    current = start;
+
+    while (current < end) {
+        offset = current-start;
+        vma = find_vma(mm, current);
+
+        // Prepare the network request
+        nmmap_send_msg = kzalloc(SYNC_REQUEST_SIZE, GFP_ATOMIC);
+        nmmap_send_msg[0] = REQUEST_PAGE_SYNC;
+        memcpy(&nmmap_send_msg[1], &offset, PAGE_OFFSET_SIZE);
+        memcpy(&nmmap_send_msg[1+PAGE_OFFSET_SIZE], (void *)current, CLIENT_PAGE_SIZE);
+
+        // Send the request away
+        cn_nmmap_send_msg(nmmap_send_msg, SYNC_REQUEST_SIZE);
+        if (wait_for_page_sync_response(100)) { // Wait for the response for a moment
+                vma->vm_flags &= ~VM_SOFTDIRTY; // Remove page dirty flag. TODO: This may not be correct
+        }
+
+        current += CLIENT_PAGE_SIZE;
     }
-    
-
-
 }
 
 static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct vm_fault *vmf) {
@@ -167,7 +209,7 @@ static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct 
 
         // Send the request away
         cn_nmmap_send_msg(nmmap_send_msg, PAGE_REQUEST_SIZE);
-        wait_for_response(100); // Wait for the response for a moment
+        wait_for_page_response(100); // Wait for the response for a moment
 
         // Create's a page and fills it with the data recieved from over the network
         virt_page = (char *)get_zeroed_page(GFP_USER);
