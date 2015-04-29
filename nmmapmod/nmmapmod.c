@@ -190,6 +190,8 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
 
         current += CLIENT_PAGE_SIZE;
     }
+
+    return 0;
 }
 
 static int network_mmap_fault_module_handler(struct vm_area_struct *vma, struct vm_fault *vmf) {
