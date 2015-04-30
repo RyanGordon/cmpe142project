@@ -26,6 +26,7 @@ int seq;
 #define DEFAULT_CLIENT_MEMORY_SIZE  0x10000
 
 void page_request_callback(char *recv_data);
+void page_sync_request_callback(uint64_t page_offset, char *page);
 bool nm_client_request_page(int, uint64_t, uint8_t *);
 
 static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 3, 0x456 };
