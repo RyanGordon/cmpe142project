@@ -94,7 +94,7 @@ void page_sync_request_callback(uint64_t page_offset, char *page) {
 
     response_data = (char *)calloc((int)SYNC_RESPONSE_SIZE, sizeof(uint8_t));
 
-    printf("Synchronizing page: %d\n", page_offset);
+    printf("Synchronizing page: %lu\n", page_offset);
     ret = nm_client_request_sync(client_socket_fd, page_offset, (uint8_t *)page);
 
     msg = (struct cn_msg *)calloc(sizeof(struct cn_msg) + SYNC_RESPONSE_SIZE, sizeof(uint8_t));
@@ -119,7 +119,7 @@ void page_request_callback(uint64_t page_offset) {
     response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
     page = (char *)calloc((int)CLIENT_PAGE_SIZE, sizeof(uint8_t));
 
-    printf("Recieved request address: %d\n", page_offset);
+    printf("Recieved request address: %lu\n", page_offset);
     nm_client_request_page(client_socket_fd, page_offset, (uint8_t *)page);
     response_data[0] = RESPONSE_PAGE_OK;
     memcpy(&response_data[1], page, CLIENT_PAGE_SIZE);

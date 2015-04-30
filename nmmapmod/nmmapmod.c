@@ -178,8 +178,8 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
 
         offset = current_pos-start;
 
-	printk(KERN_INFO "current_pos: %lu, offset: %lu, byte: %02x\n", current_pos, offset, *((char *)current_pos));
-	
+        printk(KERN_INFO "current_pos: %lu, offset: %lu, byte: %02x\n", current_pos, offset, *((char *)current_pos));
+
         // Prepare the network request
         nmmap_send_msg = kzalloc(SYNC_REQUEST_SIZE, GFP_ATOMIC);
         nmmap_send_msg[0] = REQUEST_PAGE_SYNC;
