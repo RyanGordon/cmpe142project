@@ -67,7 +67,7 @@ int main (int argc, char *argv[])
 		if(strcmp(argv[i], "-p") == 0)
 		{
 			/* User specified port */
-			if(left == 1)
+			if(left >= 1)
 				port = atoi(argv[i+1]);
 			else
 				die("Error: Insufficient parameters specified.\n");
@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
 		if(strcmp(argv[i], "-h") == 0)
 		{
 			/* User specified IP address */
-			if(left == 1)
+			if(left >= 1)
 				strcpy(hostname, argv[i+1]);
 			else
 				die("Error: Insufficient parameters specified.\n");
