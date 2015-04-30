@@ -73,7 +73,7 @@ static void cn_nmmap_msg_callback(struct cn_msg *msg, struct netlink_skb_parms *
     uint8_t response_code;
     char *response_data;
 
-    printk(KERN_INFO "%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d.\n", __func__, jiffies, msg->id.idx, msg->id.val, msg->seq, msg->ack, msg->len, msg->len);
+    printk(KERN_INFO "%s: %lu: idx=%x, val=%x, seq=%u, ack=%u, len=%d.\n", __func__, jiffies, msg->id.idx, msg->id.val, msg->seq, msg->ack, msg->len);
     
     response_code = msg->data[0];
     switch (response_code) {
@@ -159,10 +159,9 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
     struct mm_struct *mm = current->mm;    
     struct vm_area_struct *vma;
     int end;
-    int current;
+    int current_pos;
     int offset;
     int error = -EINVAL;
-    bool sync_response;
     char *nmmap_send_msg;
 
     // TODO: These 3 lines and the while loop may be wrong
@@ -171,19 +170,19 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
     // length "len" and that the pages are are constant 4Ks
     len = (len + ~PAGE_MASK) & PAGE_MASK;
     end = start + len;
-    current = start;
+    current_pos = start;
 
-    while (current < end) {
-    vma = find_vma(mm, current);
+    while (current_pos < end) {
+    vma = find_vma(mm, current_pos);
     if (!(vma->vm_flags & VM_SOFTDIRTY)) continue; // Don't sync the page if it isn't dirty
 
-    offset = current-start;
+    offset = current_pos-start;
 
     // Prepare the network request
     nmmap_send_msg = kzalloc(SYNC_REQUEST_SIZE, GFP_ATOMIC);
     nmmap_send_msg[0] = REQUEST_PAGE_SYNC;
     memcpy(&nmmap_send_msg[1], &offset, PAGE_OFFSET_SIZE);
-    memcpy(&nmmap_send_msg[1+PAGE_OFFSET_SIZE], (void *)current, CLIENT_PAGE_SIZE);
+    memcpy(&nmmap_send_msg[1+PAGE_OFFSET_SIZE], (void *)current_pos, CLIENT_PAGE_SIZE);
 
     // Send the request away
     cn_nmmap_send_msg(nmmap_send_msg, SYNC_REQUEST_SIZE);
@@ -191,7 +190,7 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
         vma->vm_flags &= ~VM_SOFTDIRTY; // Remove page dirty flag. TODO: This may not be correct
     }
 
-    current += CLIENT_PAGE_SIZE;
+    current_pos += CLIENT_PAGE_SIZE;
     }
 
     return 0;
