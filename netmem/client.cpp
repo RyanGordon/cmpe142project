@@ -25,7 +25,7 @@ int seq;
 #define DEFAULT_CLIENT_PAGE_SIZE    0x1000
 #define DEFAULT_CLIENT_MEMORY_SIZE  0x10000
 
-void page_request_callback(char *recv_data);
+void page_request_callback(uint64_t page_offset);
 void page_sync_request_callback(uint64_t page_offset, char *page);
 bool nm_client_request_page(int client_socket_fd, uint64_t value, uint8_t *buffer);
 bool nm_client_request_sync(int client_socket_fd, uint64_t value, uint8_t *buffer);
