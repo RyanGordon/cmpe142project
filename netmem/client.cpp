@@ -27,7 +27,8 @@ int seq;
 
 void page_request_callback(char *recv_data);
 void page_sync_request_callback(uint64_t page_offset, char *page);
-bool nm_client_request_page(int, uint64_t, uint8_t *);
+bool nm_client_request_page(int client_socket_fd, uint64_t value, uint8_t *buffer);
+bool nm_client_request_sync(int client_socket_fd, uint64_t value, uint8_t *buffer);
 
 static struct cb_id cn_nmmap_id = { CN_NETLINK_USERS + 3, 0x456 };
 
