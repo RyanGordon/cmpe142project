@@ -173,8 +173,10 @@ static int network_msync_handler(unsigned long start, size_t len, int flags)
     current = start;
 
     while (current < end) {
-        offset = current-start;
         vma = find_vma(mm, current);
+        if (!(vma->vm_flags & VM_SOFTDIRTY)) continue; // Don't sync the page if it isn't dirty
+
+        offset = current-start;
 
         // Prepare the network request
         nmmap_send_msg = kzalloc(SYNC_REQUEST_SIZE, GFP_ATOMIC);
