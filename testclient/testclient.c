@@ -26,7 +26,7 @@
  #define __NR_network_msync 319
  #define SYS_network_msync __NR_network_msync
 
-// Need to do this here because glibc/gcc is fucked 
+// Need to do this here because glibc/gcc is buggy
 // and the default syscall header is not compatible
 // with returning 64bit values. It turns out that
 // the default syscall header is prototyped with a
