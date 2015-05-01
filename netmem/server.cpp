@@ -10,13 +10,14 @@
 #include "shared.h"
 using namespace std;
 
+void save_write(void);
+
 /*------------------------------------------------*/
 
 /* This is the network memory */
 uint8 *shared_memory = NULL;
 static int shared_memory_size = 0x10000; 	/* Fixed: 64K */
 static int shared_page_size = 0x1000;	/* Fixed: 4K */
-
 
 void command_request_page_sync(int client_socket_fd)
 {
@@ -35,6 +36,8 @@ void command_request_page_sync(int client_socket_fd)
 		&shared_memory[shared_memory_offset], 
 		shared_page_size 
 		);
+
+	save_write();
 }
 
 void command_request_page(int client_socket_fd)
@@ -101,6 +104,14 @@ bool command_connect(int client_socket_fd)
 void command_disconnect(int client_socket_fd)
 {
 	/* */
+}
+
+void save_write(void) {
+	/* Save (possibly synchronized) shared memory) */
+	FILE *fd;
+	fd = fopen("shared.bin", "wb");
+	fwrite(shared_memory, shared_memory_size, 1, fd);
+	fclose(fd);
 }
 
 void server_dispatch_command(int client_socket_fd)
@@ -218,12 +229,10 @@ void run_server(char *hostname, int port, int argc, char *argv[])
 	// Allocate shared memory
 	
 	shared_memory = new uint8 [shared_memory_size];
+	memset(shared_memory, 0x20, shared_memory_size);
+	strcpy((char *)shared_memory, "HELLO THIS IS US. WE ARE SPARTA: RYAN, CHARLES, BRITTO, ANDREW, EDWIN\n\x00");
+
 	printf("Server: Allocated %08X bytes of network-shared memory.\n", shared_memory_size);
-	
-	for(int i = 0; i < shared_memory_size / shared_page_size; i++)
-	{
-		memset(shared_memory + i * shared_page_size, 0xA0+i, shared_page_size);
-	}
 	
 	//----------------------------------------------------------------------
 
@@ -231,12 +240,6 @@ void run_server(char *hostname, int port, int argc, char *argv[])
 	server_dispatch_command(client_socket_fd);
 	
 	printf("\n***Server dispatch loop exit.\n");
-	
-	/* Save (possibly synchronized) shared memory) */
-	FILE *fd;
-	fd = fopen("shared.bin", "wb");
-	fwrite(shared_memory, shared_memory_size, 1, fd);
-	fclose(fd);
 
 	delete []shared_memory;
 

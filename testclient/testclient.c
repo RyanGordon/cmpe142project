@@ -59,12 +59,19 @@ int network_msync(unsigned long start, size_t len, int flags) {
 int main() {
     char *p = network_mmap(NULL, (size_t)0x2000, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, (off_t)0);
     printf("Return value p: %016llX\n", (uint64_t)p);
+    char *p = q;
+
+    for (i = 0; q[i] != 0; i++) {
+        q[i] = tolower(q[i]);
+    }
 
     // The first access to each page in the follow two
     // statements will cause a page fault which should
     // be handled in our kernel module if it is loaded.
     print_page(p, 0x0000);
     print_page(p, 0x1000);
+
+    network_msync((unsigned long)&p[0x0000], 2*PAGE_SIZE, MS_SYNC);
     printf("Done.\n");
     return 0;
 }
