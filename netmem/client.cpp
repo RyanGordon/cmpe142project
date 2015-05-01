@@ -12,9 +12,12 @@
 #include "shared.h"
 using namespace std;
 
+#define DEFAULT_CLIENT_PAGE_SIZE    0x1000
+#define DEFAULT_CLIENT_MEMORY_SIZE  0x10000
+
 int client_page_mask;
 int client_offs_mask;
-int client_page_size;
+int client_page_size = CLIENT_PAGE_SIZE;
 void *client_region_base;
 size_t client_region_size;
 struct sigaction action;
@@ -22,11 +25,8 @@ int client_socket_fd;
 int sock;
 int seq;
 
-#define DEFAULT_CLIENT_PAGE_SIZE    0x1000
-#define DEFAULT_CLIENT_MEMORY_SIZE  0x10000
-
 void page_request_callback(uint64_t page_offset);
-void page_sync_request_callback(uint64_t page_offset, char *page);
+void page_sync_request_callback(uint64_t page_offset, uint8_t *page);
 bool nm_client_request_page(int client_socket_fd, uint64_t value, uint8_t *buffer);
 bool nm_client_request_sync(int client_socket_fd, uint64_t value, uint8_t *buffer);
 
@@ -39,12 +39,12 @@ static int netlink_send(struct cn_msg *msg) {
     unsigned int cn_msg_size;
     unsigned int total_size;
     int err;
-    char *buf;
+    uint8_t *buf;
     struct cn_msg *m;
 
     cn_msg_size = sizeof(struct cn_msg) + msg->len;
     total_size = NLMSG_SPACE(cn_msg_size);
-    buf = (char *)calloc(total_size, sizeof(uint8_t));
+    buf = (uint8_t *)calloc(total_size, sizeof(uint8_t));
     
     nlh = (struct nlmsghdr *)buf;
     nlh->nlmsg_seq = seq++;
@@ -68,31 +68,31 @@ static int netlink_send(struct cn_msg *msg) {
 
 void handle_response(struct cn_msg *msg) {
     uint8_t response_code;
-    char *recv_data;
-    char *recv_data2;
+    uint8_t *recv_data;
+    uint8_t *recv_data2;
 
     response_code = msg->data[0];
     switch (response_code) {
         case REQUEST_PAGE:
-            recv_data = (char *)calloc(PAGE_OFFSET_SIZE, sizeof(uint8_t));
+            recv_data = (uint8_t *)calloc(PAGE_OFFSET_SIZE, sizeof(uint8_t));
             memcpy(recv_data, &msg->data[1], PAGE_OFFSET_SIZE);
             page_request_callback(*((uint64_t *)recv_data));
             break;
         case REQUEST_PAGE_SYNC:
-            recv_data = (char *)calloc(PAGE_OFFSET_SIZE, sizeof(uint8_t));
+            recv_data = (uint8_t *)calloc(PAGE_OFFSET_SIZE, sizeof(uint8_t));
             memcpy(recv_data, &msg->data[1], PAGE_OFFSET_SIZE);
-            recv_data2 = (char *)calloc(CLIENT_PAGE_SIZE, sizeof(uint8_t));
+            recv_data2 = (uint8_t *)calloc(CLIENT_PAGE_SIZE, sizeof(uint8_t));
             memcpy(recv_data2, &msg->data[1 + PAGE_OFFSET_SIZE], CLIENT_PAGE_SIZE);
             page_sync_request_callback(*((uint64_t *)recv_data), recv_data2);
     }
 }
 
-void page_sync_request_callback(uint64_t page_offset, char *page) {
+void page_sync_request_callback(uint64_t page_offset, uint8_t *page) {
     struct cn_msg *msg;
-    char *response_data;
+    uint8_t *response_data;
     bool ret;
 
-    response_data = (char *)calloc((int)SYNC_RESPONSE_SIZE, sizeof(uint8_t));
+    response_data = (uint8_t *)calloc((int)SYNC_RESPONSE_SIZE, sizeof(uint8_t));
 
     printf("Synchronizing page: %016llX\n", page_offset);
     ret = nm_client_request_sync(client_socket_fd, page_offset, (uint8_t *)page);
@@ -113,11 +113,11 @@ void page_sync_request_callback(uint64_t page_offset, char *page) {
 
 void page_request_callback(uint64_t page_offset) {
     struct cn_msg *msg;
-    char *response_data;
-    char *page;
+    uint8_t *response_data;
+    uint8_t *page;
 
-    response_data = (char *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
-    page = (char *)calloc((int)CLIENT_PAGE_SIZE, sizeof(uint8_t));
+    response_data = (uint8_t *)calloc((int)PAGE_RESPONSE_SIZE, sizeof(uint8_t));
+    page = (uint8_t *)calloc((int)CLIENT_PAGE_SIZE, sizeof(uint8_t));
 
     printf("Recieved request address: %016llX\n", page_offset);
     nm_client_request_page(client_socket_fd, page_offset, (uint8_t *)page);
